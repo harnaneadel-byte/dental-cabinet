@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Font families -->
+    <string name="font_family_alumni_sans">Alumni Sans, Albert Sans, Arial, sans-serif</string>
+    <string name="font_family_albert_sans">Albert Sans, Avenir Next, Helvetica Neue, Arial, system-ui, sans-serif</string>
+    <string name="font_family_mono">SFMono-Regular, Roboto Mono, Consolas, monospace</string>
+
+    <!-- Typography scale (16px root, rem values) -->
+    <string name="type_scale_8">0.5rem</string>        <!-- decorative micro-type -->
+    <string name="type_scale_9">0.5625rem</string>     <!-- dense chrome, viz tick labels -->
+    <string name="type_scale_10">0.625rem</string>     <!-- overline, smallest caps -->
+    <string name="type_scale_11">0.6875rem</string>    <!-- eyebrow, badge, tag -->
+    <string name="type_scale_12">0.75rem</string>      <!-- meta lines, inline code -->
+    <string name="type_scale_13">0.8125rem</string>    <!-- secondary UI text -->
+    <string name="type_scale_14">0.875rem</string>     <!-- dense body, list rows -->
+    <string name="type_scale_15">0.9375rem</string>    <!-- long-form secondary -->
+    <string name="type_scale_16">1rem</string>          <!-- default body -->
+    <string name="type_scale_18">1.125rem</string>     <!-- lead paragraph, card heading -->
+    <string name="type_scale_20">1.25rem</string>      <!-- card and panel titles -->
+    <string name="type_scale_24">1.5rem</string>       <!-- subsection heads -->
+    <string name="type_scale_28">1.75rem</string>      <!-- section heads -->
+    <string name="type_scale_32">2rem</string>         <!-- large section heads -->
+    <string name="type_scale_40">2.5rem</string>       <!-- sub-display -->
+    <string name="type_scale_48">3rem</string>         <!-- small display -->
+    <string name="type_scale_56">3.5rem</string>       <!-- display -->
+    <string name="type_scale_64">4rem</string>         <!-- large display -->
+    <string name="type_scale_72">4.5rem</string>       <!-- hero display -->
+    <string name="type_scale_80">5rem</string>         <!-- hero display, wide -->
+    <string name="type_scale_88">5.5rem</string>       <!-- largest hero display -->
+
+    <!-- Wordmark (brand lockup) -->
+    <string name="type_wordmark_font_family">Alumni Sans, Albert Sans, Arial, sans-serif</string>
+    <string name="type_wordmark_font_size">1.125rem</string>
+    <string name="type_wordmark_font_weight">400</string>
+    <string name="type_wordmark_line_height">1</string>
+
+    <!-- Display (h1) - thin, elegant -->
+    <string name="type_display_font_family">Alumni Sans, Albert Sans, Arial, sans-serif</string>
+    <string name="type_display_font_size">clamp(3.4rem, 6.5vw, 5.6rem)</string>
+    <string name="type_display_font_weight">100</string>
+    <string name="type_display_letter_spacing">-0.01em</string>
+    <string name="type_display_line_height">1.02</string>
+
+    <!-- Headline (h2) - heavier than h1, grounding each block -->
+    <string name="type_headline_font_family">Alumni Sans, Albert Sans, Arial, sans-serif</string>
+    <string name="type_headline_font_size">clamp(2.6rem, 4vw, 3.4rem)</string>
+    <string name="type_headline_font_weight">300</string>
+    <string name="type_headline_letter_spacing">0</string>
+    <string name="type_headline_line_height">1.04</string>
+
+    <!-- Title (h3) - component and panel headings -->
+    <string name="type_title_font_family">Albert Sans, Avenir Next, Helvetica Neue, Arial, system-ui, sans-serif</string>
+    <string name="type_title_font_size">1.125rem</string>
+    <string name="type_title_font_weight">500</string>
+    <string name="type_title_line_height">1.35</string>
+
+    <!-- Body - long copy on dark surfaces needs air -->
+    <string name="type_body_font_family">Albert Sans, Avenir Next, Helvetica Neue, Arial, system-ui, sans-serif</string>
+    <string name="type_body_font_size">1rem</string>
+    <string name="type_body_font_weight">400</string>
+    <string name="type_body_line_height">1.8</string>
+
+    <!-- Eyebrow - small mono markers -->
+    <string name="type_eyebrow_font_family">SFMono-Regular, Roboto Mono, Consolas, monospace</string>
+    <string name="type_eyebrow_font_size">0.6875rem</string>
+    <string name="type_eyebrow_font_weight">500</string>
+    <string name="type_eyebrow_letter_spacing">0.18em</string>
+
+    <!-- Mono label - category labels, nav metadata -->
+    <string name="type_mono_font_family">SFMono-Regular, Roboto Mono, Consolas, monospace</string>
+    <string name="type_mono_font_size">0.6875rem</string>
+    <string name="type_mono_letter_spacing">0.22em</string>
+</resources>

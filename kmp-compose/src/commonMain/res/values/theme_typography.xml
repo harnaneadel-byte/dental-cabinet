@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Font families (shared) -->
+    <string name="font_family_alumni_sans">Alumni Sans, Albert Sans, Arial, sans-serif</string>
+    <string name="font_family_albert_sans">Albert Sans, Avenir Next, Helvetica Neue, Arial, system-ui, sans-serif</string>
+
+    <!-- Typography scale (16px root, rem values) -->
+    <string name="type_scale_16">1rem</string>          <!-- default body -->
+    <string name="type_scale_20">1.25rem</string>      <!-- card titles -->
+    <string name="type_scale_24">1.5rem</string>       <!-- subsection heads -->
+    <string name="type_scale_28">1.75rem</string>      <!-- section heads -->
+    <string name="type_scale_32">2rem</string>         <!-- large section heads -->
+
+    <!-- Display (h1) - thin, elegant -->
+    <string name="type_display_font_size">clamp(3.4rem, 6.5vw, 5.6rem)</string>
+    <string name="type_display_font_weight">100</string>
+
+    <!-- Headline (h2) - heavier than h1 -->
+    <string name="type_headline_font_size">clamp(2.6rem, 4vw, 3.4rem)</string>
+    <string name="type_headline_font_weight">300</string>
+
+    <!-- Body -->
+    <string name="type_body_font_size">1rem</string>
+    <string name="type_body_font_weight">400</string>
+    <string name="type_body_line_height">1.8</string>

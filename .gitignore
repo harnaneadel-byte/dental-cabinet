@@ -1,0 +1,36 @@
+# Build outputs
+build/
+**/build/
+
+# Gradle cache
+.gradle/
+gradle/
+gradle-wrapper.jar
+
+# IDE / editor
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Local config — contains SDK paths/secrets, NEVER commit
+local.properties
+
+# Secrets / credentials
+*.keystore
+*.jks
+key.properties
+
+# Generated / error logs
+build-errors.log
+domain-error.log
+MASTER_PROMPT.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups created during this session
+gradle-backup-*/*.gitignore
+*.bak

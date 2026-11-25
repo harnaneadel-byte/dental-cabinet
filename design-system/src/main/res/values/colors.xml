@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand anchors - Dental Cabinet primary accent -->
+    <color name="primary_gold">#D4AF38</color>        <!-- Primary accent, gold fill -->
+    <color name="primary_gold_rich">#B8860B</color>    <!-- Active CTA, severity-medium -->
+    <color name="primary_gold_pale">#E8C572</color>    <!-- Hover lift, pale fills -->
+    <color name="primary_gold_deep">#8B6914</color>    <!-- Borders, subdued icons -->
+
+    <!-- Secondary accent - state contrast -->
+    <color name="secondary_patina">#6DA56A</color>     <!-- Secondary accent, improved states -->
+    <color name="secondary_patina_pale">#BCD6BC</color> <!-- Hover lift on patina -->
+    <color name="secondary_patina_deep">#5D8A5A</color> <!-- Deep oxide, dark variants -->
+
+    <!-- Surfaces - Lacquer / dark mineral -->
+    <color name="surface_lacquer_black">#1A1A1A</color>         <!-- Page ground, warm mineral -->
+    <color name="surface_lacquer_deep">#2A2A2A</color>          <!-- Deepest inset -->
+    <color name="surface_raised_lacquer">#3A3A3A</color>         <!-- Panels, cards -->
+    <color name="surface_graphite">#353535</color>              <!-- Input fields, inactive -->
+    <color name="surface_graphite_2">#3D3D3D</color>            <!-- One step above graphite -->
+
+    <!-- Text -->
+    <color name="text_champagne">#F5D5C7</color>                 <!-- Headlines, <strong> -->
+    <color name="text_warm">#E8E2DC</color>                      <!-- Body copy on dark -->
+    <color name="text_muted">#A0A0A0</color>                      <!-- Captions, meta -->
+    <color name="text_faint">#757575</color>                      <!-- Subdued labels -->
+    <color name="text_mute_deep">#555555</color>                  <!-- Disabled -->
+
+    <!-- Neutral ramp -->
+    <color name="neutral_100">#FFFFFF</color>
+    <color name="neutral_90">#E0E0E0</color>
+    <color name="neutral_80">#B0B0B0</color>
+    <color name="neutral_70">#808080</color>
+    <color name="neutral_60">#666666</color>
+    <color name="neutral_50">#4D4D4D</color>
+
+    <!-- State -->
+    <color name="vermilion_warning">#B32630</color>              <!-- Error, anti-pattern warning -->
+    <color name="success">#4CAF50</color>                          <!-- Success states -->
+    <color name="success_bg">#E8F5E9</color>                       <!-- Success background -->
+    <color name="success_border">#A5D6A7</color>                    <!-- Success border -->
+
+    <!-- Gold ramp (legacy compatibility) -->
+    <color name="gold_hairline">#CFD8C6</color>                     <!-- Default rule, neutral -->
+    <color name="gold_hairline_strong">#8D6E63</color>             <!-- Active rule, gold -->
+
+    <!-- Background -->
+    <color name="background_lacquer">#1E1E1E</color>               <!-- Default background -->
+    <color name="background_paper_light">#F5F0E8</color>          <!-- Light mode paper -->
+</resources>

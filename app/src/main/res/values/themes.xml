@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.DentalCabinet" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary_gold</item>
+        <item name="colorOnPrimary">@color/neutral_100</item>
+        <item name="colorSecondary">@color/secondary_patina</item>
+        <item name="colorSurface">@color/surface_lacquer_black</item>
+        <item name="colorOnSurface">@color/text_warm</item>
+        <item name="colorError">@color/vermilion_warning</item>
+        <item name="android:windowBackground">@color/background_lacquer</item>
+    </style>
+</resources>
