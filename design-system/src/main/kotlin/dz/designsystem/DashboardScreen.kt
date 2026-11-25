@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,7 +32,8 @@ enum class DashboardSection(val label: String) {
     AGENDA("Agenda"),
     DENTAL_CHART("Schéma dentaire"),
     TREATMENT_PLANS("Plans de traitement"),
-    PAYMENTS("Encaissements")
+    PAYMENTS("Encaissements"),
+    ADMINISTRATION("Administration")
 }
 
 data class DashboardPatientItem(
@@ -55,7 +58,21 @@ data class DashboardReceiptItem(
     val amountDa: Long
 )
 
+data class DashboardUserItem(
+    val username: String,
+    val roleLabel: String,
+    val isAdmin: Boolean,
+    val canEditPatients: Boolean,
+    val canEditTreatments: Boolean,
+    val canRecordPayments: Boolean
+)
+
 data class DashboardUiState(
+    val currentUsername: String = "admin",
+    val isAdmin: Boolean = true,
+    val canEditPatients: Boolean = true,
+    val canEditTreatments: Boolean = true,
+    val canRecordPayments: Boolean = true,
     val selectedSection: DashboardSection = DashboardSection.OVERVIEW,
     val searchQuery: String = "",
     val patients: List<DashboardPatientItem> = listOf(
@@ -76,6 +93,9 @@ data class DashboardUiState(
         DashboardReceiptItem(3L, "Karim Mansouri", "Acompte implant", 20000L),
         DashboardReceiptItem(4L, "Amine Benali", "Consultation + Radio", 14500L)
     ),
+    val users: List<DashboardUserItem> = listOf(
+        DashboardUserItem("admin", "ADMIN", isAdmin = true, canEditPatients = true, canEditTreatments = true, canRecordPayments = true)
+    ),
     val statusMessage: String? = null
 )
 
@@ -88,10 +108,14 @@ fun DashboardScreen(
     onAddPatient: (String) -> Unit = {},
     onStartTreatment: (Long) -> Unit = {},
     onRecordPayment: (String, String, Long) -> Unit = { _, _, _ -> },
-    onClearStatusMessage: () -> Unit = {}
+    onCreateOrUpdateUser: (username: String, password: String?, isAdmin: Boolean, canEditPatients: Boolean, canEditTreatments: Boolean, canRecordPayments: Boolean) -> Unit = { _, _, _, _, _, _ -> },
+    onDeleteUser: (String) -> Unit = {},
+    onClearStatusMessage: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     var showAddPatientDialog by remember { mutableStateOf(false) }
     var showAddPaymentDialog by remember { mutableStateOf(false) }
+    var showCreateUserDialog by remember { mutableStateOf(false) }
     var selectedPatientDetail by remember { mutableStateOf<DashboardPatientItem?>(null) }
 
     DentalDashboardTheme {
@@ -104,17 +128,23 @@ fun DashboardScreen(
             if (isWide) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     DashboardSidebar(
+                        currentUsername = uiState.currentUsername,
+                        isAdmin = uiState.isAdmin,
                         selectedSection = uiState.selectedSection,
                         onSelectSection = onSelectSection,
+                        onLogout = onLogout,
                         modifier = Modifier.width(260.dp).fillMaxHeight()
                     )
 
                     Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                         DashboardHeader(
+                            currentUsername = uiState.currentUsername,
+                            isAdmin = uiState.isAdmin,
                             searchQuery = uiState.searchQuery,
                             onSearchQueryChange = onSearchQueryChange,
                             showMenuButton = false,
                             onMenuClick = {},
+                            onLogout = onLogout,
                             modifier = Modifier.fillMaxWidth().height(64.dp)
                         )
                         DashboardMainContent(
@@ -124,12 +154,20 @@ fun DashboardScreen(
                             onViewPatientDetail = { selectedPatientDetail = it },
                             onOpenAddPatient = { showAddPatientDialog = true },
                             onOpenAddPayment = { showAddPaymentDialog = true },
+                            onOpenCreateUser = { showCreateUserDialog = true },
+                            onUpdateUserPermissions = { user, editPatients, editTreatments, recordPayments ->
+                                onCreateOrUpdateUser(user.username, null, user.isAdmin, editPatients, editTreatments, recordPayments)
+                            },
+                            onDeleteUser = onDeleteUser,
                             onSelectSection = onSelectSection,
                             modifier = Modifier.weight(1f).fillMaxWidth()
                         )
                     }
 
                     DashboardRightPanel(
+                        canEditPatients = uiState.canEditPatients,
+                        canRecordPayments = uiState.canRecordPayments,
+                        isAdmin = uiState.isAdmin,
                         onOpenAddPatient = { showAddPatientDialog = true },
                         onOpenAddPayment = { showAddPaymentDialog = true },
                         onNavigateSection = onSelectSection,
@@ -148,10 +186,16 @@ fun DashboardScreen(
                             drawerContainerColor = Color(0xFF1E293B)
                         ) {
                             DashboardSidebar(
+                                currentUsername = uiState.currentUsername,
+                                isAdmin = uiState.isAdmin,
                                 selectedSection = uiState.selectedSection,
                                 onSelectSection = { section ->
                                     onSelectSection(section)
                                     scope.launch { drawerState.close() }
+                                },
+                                onLogout = {
+                                    scope.launch { drawerState.close() }
+                                    onLogout()
                                 },
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -160,10 +204,13 @@ fun DashboardScreen(
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         DashboardHeader(
+                            currentUsername = uiState.currentUsername,
+                            isAdmin = uiState.isAdmin,
                             searchQuery = uiState.searchQuery,
                             onSearchQueryChange = onSearchQueryChange,
                             showMenuButton = true,
                             onMenuClick = { scope.launch { drawerState.open() } },
+                            onLogout = onLogout,
                             modifier = Modifier.fillMaxWidth()
                         )
                         DashboardMainContent(
@@ -173,6 +220,11 @@ fun DashboardScreen(
                             onViewPatientDetail = { selectedPatientDetail = it },
                             onOpenAddPatient = { showAddPatientDialog = true },
                             onOpenAddPayment = { showAddPaymentDialog = true },
+                            onOpenCreateUser = { showCreateUserDialog = true },
+                            onUpdateUserPermissions = { user, editPatients, editTreatments, recordPayments ->
+                                onCreateOrUpdateUser(user.username, null, user.isAdmin, editPatients, editTreatments, recordPayments)
+                            },
+                            onDeleteUser = onDeleteUser,
                             onSelectSection = onSelectSection,
                             modifier = Modifier.weight(1f).fillMaxWidth()
                         )
@@ -197,6 +249,16 @@ fun DashboardScreen(
                 onConfirm = { patientName, label, amount ->
                     onRecordPayment(patientName, label, amount)
                     showAddPaymentDialog = false
+                }
+            )
+        }
+
+        if (showCreateUserDialog) {
+            CreateUserDialog(
+                onDismiss = { showCreateUserDialog = false },
+                onConfirm = { username, password, isAdminRole ->
+                    onCreateOrUpdateUser(username, password, isAdminRole, true, true, true)
+                    showCreateUserDialog = false
                 }
             )
         }
@@ -233,8 +295,11 @@ fun DashboardScreen(
 
 @Composable
 fun DashboardSidebar(
+    currentUsername: String = "admin",
+    isAdmin: Boolean = true,
     selectedSection: DashboardSection = DashboardSection.OVERVIEW,
     onSelectSection: (DashboardSection) -> Unit = {},
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val sidebarBg = Color(0xFF1E293B)
@@ -248,7 +313,11 @@ fun DashboardSidebar(
             Spacer(Modifier.width(12.dp))
             Column {
                 Text("Cabinet Dentaire", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("Dr. Bouzid Salah Eddine", color = Color.LightGray, fontSize = 12.sp)
+                Text(
+                    text = if (isAdmin) "$currentUsername • Administrateur" else "$currentUsername • Praticien",
+                    color = Color(0xFFD4AF38),
+                    fontSize = 12.sp
+                )
             }
         }
 
@@ -301,7 +370,33 @@ fun DashboardSidebar(
             onClick = { onSelectSection(DashboardSection.PAYMENTS) }
         )
 
+        if (isAdmin) {
+            Text("Système", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp))
+            SidebarItem(
+                label = DashboardSection.ADMINISTRATION.label,
+                icon = Icons.Default.AdminPanelSettings,
+                isActive = selectedSection == DashboardSection.ADMINISTRATION,
+                activeColor = activeAccent,
+                onClick = { onSelectSection(DashboardSection.ADMINISTRATION) }
+            )
+        }
+
         Spacer(Modifier.weight(1f))
+
+        OutlinedButton(
+            onClick = onLogout,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF5D5C7)),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .heightIn(min = 48.dp)
+                .testTag("sidebar_logout_button")
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Déconnexion", modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Déconnexion", fontSize = 13.sp)
+        }
 
         Surface(
             color = Color(0xFF0F172A),
@@ -349,10 +444,13 @@ fun SidebarItem(
 
 @Composable
 fun DashboardHeader(
+    currentUsername: String = "admin",
+    isAdmin: Boolean = true,
     searchQuery: String = "",
     onSearchQueryChange: (String) -> Unit = {},
     showMenuButton: Boolean = false,
     onMenuClick: () -> Unit = {},
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(modifier = modifier, color = Color.White, shadowElevation = 1.dp) {
@@ -386,19 +484,29 @@ fun DashboardHeader(
 
             AssistChip(
                 onClick = {},
-                label = { Text("Hors ligne", maxLines = 1) },
-                leadingIcon = { Icon(Icons.Default.WifiOff, contentDescription = "Hors ligne", modifier = Modifier.size(16.dp)) },
-                colors = AssistChipDefaults.assistChipColors(labelColor = Color(0xFFB32630))
+                label = { Text(if (isAdmin) "Admin" else "Praticien", maxLines = 1) },
+                leadingIcon = {
+                    Icon(
+                        if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                colors = AssistChipDefaults.assistChipColors(
+                    labelColor = if (isAdmin) Color(0xFF8B6914) else Color(0xFF1E293B)
+                )
             )
 
-            if (!showMenuButton) {
-                IconButton(onClick = {}) {
-                    BadgedBox(badge = { Badge() }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications")
-                    }
+            if (showMenuButton) {
+                IconButton(
+                    onClick = onLogout,
+                    modifier = Modifier.testTag("header_logout_button")
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Déconnexion")
                 }
+            } else {
                 Spacer(Modifier.width(8.dp))
-                Text("Dr. Bouzid Salah Eddine", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(currentUsername, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             }
         }
     }
@@ -412,6 +520,9 @@ fun DashboardMainContent(
     onViewPatientDetail: (DashboardPatientItem) -> Unit,
     onOpenAddPatient: () -> Unit,
     onOpenAddPayment: () -> Unit,
+    onOpenCreateUser: () -> Unit,
+    onUpdateUserPermissions: (DashboardUserItem, Boolean, Boolean, Boolean) -> Unit,
+    onDeleteUser: (String) -> Unit,
     onSelectSection: (DashboardSection) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -444,14 +555,18 @@ fun DashboardMainContent(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = "Bonjour Dr. Bouzid,",
+                        text = "Bonjour ${uiState.currentUsername},",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1E293B)
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Voici la situation de votre cabinet — ${uiState.selectedSection.label}.",
+                        text = if (uiState.isAdmin) {
+                            "Accès Administrateur (tous droits d'édition) — ${uiState.selectedSection.label}."
+                        } else {
+                            "Voici la situation de votre cabinet — ${uiState.selectedSection.label}."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF475569)
                     )
@@ -496,7 +611,11 @@ fun DashboardMainContent(
 
         when (uiState.selectedSection) {
             DashboardSection.PATIENTS -> {
-                SectionHeader("Patients (${filteredPatients.size})", onOpenAddPatient, "Nouveau patient")
+                SectionHeader(
+                    title = "Patients (${filteredPatients.size})",
+                    action = if (uiState.canEditPatients) onOpenAddPatient else null,
+                    actionLabel = "Nouveau patient"
+                )
                 if (filteredPatients.isEmpty()) {
                     EmptyStateCard("Aucun patient ne correspond à la recherche.")
                 } else {
@@ -517,14 +636,41 @@ fun DashboardMainContent(
                         treatmentName = "${treatment.name} (${treatment.patientName})",
                         status = treatment.status,
                         duration = "${treatment.duration} • ${treatment.priceDa} DA",
-                        onStartTreatment = { onStartTreatment(treatment.id) }
+                        onStartTreatment = {
+                            if (uiState.canEditTreatments) onStartTreatment(treatment.id)
+                        }
                     )
                 }
             }
 
             DashboardSection.PAYMENTS -> {
-                SectionHeader("Encaissements (${uiState.receipts.size})", onOpenAddPayment, "Nouvel encaissement")
+                SectionHeader(
+                    title = "Encaissements (${uiState.receipts.size})",
+                    action = if (uiState.canRecordPayments) onOpenAddPayment else null,
+                    actionLabel = "Nouvel encaissement"
+                )
                 DashboardReceiptsCard("Journal de caisse ($totalReceiptsDa DA)", uiState.receipts, Modifier.fillMaxWidth())
+            }
+
+            DashboardSection.ADMINISTRATION -> {
+                if (uiState.isAdmin) {
+                    SectionHeader(
+                        title = "Utilisateurs & Droits (${uiState.users.size})",
+                        action = onOpenCreateUser,
+                        actionLabel = "Nouvel utilisateur"
+                    )
+                    uiState.users.forEach { user ->
+                        AdminUserCard(
+                            user = user,
+                            onTogglePatients = { onUpdateUserPermissions(user, it, user.canEditTreatments, user.canRecordPayments) },
+                            onToggleTreatments = { onUpdateUserPermissions(user, user.canEditPatients, it, user.canRecordPayments) },
+                            onTogglePayments = { onUpdateUserPermissions(user, user.canEditPatients, user.canEditTreatments, it) },
+                            onDelete = { onDeleteUser(user.username) }
+                        )
+                    }
+                } else {
+                    EmptyStateCard("Accès réservé à l'administrateur.")
+                }
             }
 
             DashboardSection.OVERVIEW -> {
@@ -532,6 +678,7 @@ fun DashboardMainContent(
                     DashboardTreatmentsCard(
                         title = "Rendez-vous & Soins du jour",
                         treatments = uiState.treatments,
+                        canEditTreatments = uiState.canEditTreatments,
                         onStartTreatment = onStartTreatment,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -541,6 +688,9 @@ fun DashboardMainContent(
                         modifier = Modifier.fillMaxWidth()
                     )
                     DashboardRightPanel(
+                        canEditPatients = uiState.canEditPatients,
+                        canRecordPayments = uiState.canRecordPayments,
+                        isAdmin = uiState.isAdmin,
                         onOpenAddPatient = onOpenAddPatient,
                         onOpenAddPayment = onOpenAddPayment,
                         onNavigateSection = onSelectSection,
@@ -551,6 +701,7 @@ fun DashboardMainContent(
                         DashboardTreatmentsCard(
                             title = "Rendez-vous & Soins du jour",
                             treatments = uiState.treatments,
+                            canEditTreatments = uiState.canEditTreatments,
                             onStartTreatment = onStartTreatment,
                             modifier = Modifier.weight(1f)
                         )
@@ -560,6 +711,59 @@ fun DashboardMainContent(
                             modifier = Modifier.weight(1f)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminUserCard(
+    user: DashboardUserItem,
+    onTogglePatients: (Boolean) -> Unit,
+    onToggleTreatments: (Boolean) -> Unit,
+    onTogglePayments: (Boolean) -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White,
+        shadowElevation = 2.dp
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(user.username, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1E293B))
+                    Text(
+                        text = if (user.isAdmin) "Administrateur — Tous les droits d'édition" else "Praticien",
+                        fontSize = 12.sp,
+                        color = if (user.isAdmin) Color(0xFF8B6914) else Color.Gray
+                    )
+                }
+                if (!user.isAdmin) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Supprimer utilisateur", tint = Color(0xFFB32630))
+                    }
+                }
+            }
+
+            if (!user.isAdmin) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("Éditer patients", fontSize = 13.sp, color = Color(0xFF1E293B))
+                    Switch(checked = user.canEditPatients, onCheckedChange = onTogglePatients)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("Éditer traitements", fontSize = 13.sp, color = Color(0xFF1E293B))
+                    Switch(checked = user.canEditTreatments, onCheckedChange = onToggleTreatments)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("Enregistrer encaissements", fontSize = 13.sp, color = Color(0xFF1E293B))
+                    Switch(checked = user.canRecordPayments, onCheckedChange = onTogglePayments)
                 }
             }
         }
@@ -625,6 +829,7 @@ fun StatCard(title: String, value: String, subtitle: String, modifier: Modifier 
 fun DashboardTreatmentsCard(
     title: String,
     treatments: List<DashboardTreatmentItem>,
+    canEditTreatments: Boolean = true,
     onStartTreatment: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -655,11 +860,11 @@ fun DashboardTreatmentsCard(
                         Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1E293B))
                         Text("${item.patientName} • ${item.duration} • ${item.priceDa} DA", fontSize = 11.sp, color = Color.Gray)
                     }
-                    if (item.status != "Completed") {
+                    if (item.status != "Completed" && canEditTreatments) {
                         TextButton(onClick = { onStartTreatment(item.id) }) {
                             Text(if (item.status == "Pending") "Démarrer" else "Terminer", fontSize = 12.sp)
                         }
-                    } else {
+                    } else if (item.status == "Completed") {
                         Icon(Icons.Default.CheckCircle, contentDescription = "Terminé", tint = Color(0xFF6DA56A), modifier = Modifier.size(18.dp))
                     }
                 }
@@ -707,6 +912,9 @@ fun DashboardReceiptsCard(
 
 @Composable
 fun DashboardRightPanel(
+    canEditPatients: Boolean = true,
+    canRecordPayments: Boolean = true,
+    isAdmin: Boolean = true,
     onOpenAddPatient: () -> Unit = {},
     onOpenAddPayment: () -> Unit = {},
     onNavigateSection: (DashboardSection) -> Unit = {},
@@ -740,22 +948,26 @@ fun DashboardRightPanel(
             Text("Actions rapides", modifier = Modifier.align(Alignment.Start), fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
             Spacer(Modifier.height(12.dp))
 
-            Button(
-                onClick = onOpenAddPatient,
-                modifier = Modifier.fillMaxWidth().testTag("new_patient_button"),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Nouveau patient")
+            if (canEditPatients) {
+                Button(
+                    onClick = onOpenAddPatient,
+                    modifier = Modifier.fillMaxWidth().testTag("new_patient_button"),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Nouveau patient")
+                }
             }
 
-            OutlinedButton(
-                onClick = onOpenAddPayment,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("new_payment_button"),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Enregistrer encaissement")
+            if (canRecordPayments) {
+                OutlinedButton(
+                    onClick = onOpenAddPayment,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("new_payment_button"),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Enregistrer encaissement")
+                }
             }
 
             OutlinedButton(
@@ -772,6 +984,16 @@ fun DashboardRightPanel(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text("Plans de traitement")
+            }
+
+            if (isAdmin) {
+                OutlinedButton(
+                    onClick = { onNavigateSection(DashboardSection.ADMINISTRATION) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("admin_panel_button"),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Gérer utilisateurs & droits")
+                }
             }
         }
     }
@@ -857,6 +1079,59 @@ private fun AddPaymentDialog(
                 enabled = patientName.isNotBlank() && label.isNotBlank() && (parsedAmount ?: 0L) > 0L
             ) {
                 Text("Valider")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annuler")
+            }
+        }
+    )
+}
+
+@Composable
+private fun CreateUserDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (username: String, password: String, isAdmin: Boolean) -> Unit
+) {
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var isAdminRole by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nouvel utilisateur") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Nom d'utilisateur (min 3)") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Mot de passe (min 6)") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Rôle Administrateur")
+                    Switch(checked = isAdminRole, onCheckedChange = { isAdminRole = it })
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(username.trim(), password, isAdminRole) },
+                enabled = username.trim().length >= 3 && password.length >= 6
+            ) {
+                Text("Créer")
             }
         },
         dismissButton = {

@@ -1,19 +1,53 @@
 package dz.cabinet.data
 
+import android.content.Context
+import android.content.SharedPreferences
 import dz.cabinet.domain.AuditEvent
 import dz.cabinet.domain.AuditUseCase
 import dz.cabinet.domain.Cash
 import dz.cabinet.domain.Da
+import dz.cabinet.domain.EditPermissions
 import dz.cabinet.domain.ErrorCode
 import dz.cabinet.domain.Money
 import dz.cabinet.domain.Outcome
+import dz.cabinet.domain.PasswordHash
+import dz.cabinet.domain.PasswordHasher
+import dz.cabinet.domain.UserAccountSummary
+import dz.cabinet.domain.UserRole
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import java.util.UUID
+
+sealed interface AuthState {
+    data class NeedsAdminSetup(val suggestedUsername: String = "admin") : AuthState
+    data class LoggedOut(val defaultUsername: String = "admin") : AuthState
+    data class Authenticated(val user: UserAccountSummary) : AuthState
+}
+
+interface AuthRepository {
+    val authState: Flow<AuthState>
+    val users: Flow<List<UserAccountSummary>>
+    fun configureBootstrapAdmin(bootstrapPassword: String)
+    suspend fun setupAdminAccount(username: String, password: String): Outcome<UserAccountSummary>
+    suspend fun login(username: String, password: String): Outcome<UserAccountSummary>
+    suspend fun createOrUpdateUser(
+        username: String,
+        password: String?,
+        role: UserRole,
+        permissions: EditPermissions
+    ): Outcome<UserAccountSummary>
+    suspend fun deleteUser(username: String): Outcome<Unit>
+    suspend fun logout()
+}
 
 interface PatientRepository {
     val patients: Flow<List<PatientEntity>>
@@ -66,10 +100,282 @@ data class CashReceiptEntity(
     val timestamp: Long
 )
 
+private data class StoredUserRecord(
+    val username: String,
+    val role: UserRole,
+    val permissions: EditPermissions,
+    val saltBase64: String,
+    val hashBase64: String
+) {
+    fun toSummary(): UserAccountSummary = UserAccountSummary(
+        username = username,
+        role = role,
+        permissions = permissions
+    )
+}
+
 val dataModule = module {
+    single<AuthRepository> { LocalAuthRepository(androidContext()) }
     single<PatientRepository> { InMemoryPatientRepository() }
     single<TreatmentRepository> { InMemoryTreatmentRepository() }
     single<CashSessionRepository> { InMemoryCashSessionRepository() }
+}
+
+class LocalAuthRepository(context: Context) : AuthRepository {
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("cabinet_auth_prefs", Context.MODE_PRIVATE)
+    private val mutex = Mutex()
+
+    private val accounts = linkedMapOf<String, StoredUserRecord>().apply {
+        loadRecords().forEach { put(it.username.lowercase(), it) }
+    }
+
+    private val _users = MutableStateFlow(accounts.values.map { it.toSummary() })
+    override val users: Flow<List<UserAccountSummary>> = _users.asStateFlow()
+
+    private val _authState = MutableStateFlow(computeUnauthenticatedState())
+    override val authState: Flow<AuthState> = _authState.asStateFlow()
+
+    private fun computeUnauthenticatedState(): AuthState {
+        val adminRecord = accounts[ADMIN_USERNAME]
+        return if (accounts.isEmpty() || adminRecord == null) {
+            AuthState.NeedsAdminSetup(ADMIN_USERNAME)
+        } else {
+            AuthState.LoggedOut(adminRecord.username)
+        }
+    }
+
+    override fun configureBootstrapAdmin(bootstrapPassword: String) {
+        val candidate = bootstrapPassword.trim()
+        if (candidate.isBlank() || candidate == PLACEHOLDER_PASSWORD) return
+        val chars = candidate.toCharArray()
+        val hash = try {
+            PasswordHasher.hashPassword(chars)
+        } finally {
+            chars.fill('\u0000')
+        }
+        val record = StoredUserRecord(
+            username = ADMIN_USERNAME,
+            role = UserRole.ADMIN,
+            permissions = EditPermissions.admin(),
+            saltBase64 = hash.saltBase64,
+            hashBase64 = hash.hashBase64
+        )
+        accounts[ADMIN_USERNAME] = record
+        persistRecords()
+        _users.value = accounts.values.map { it.toSummary() }
+        if (_authState.value !is AuthState.Authenticated) {
+            _authState.value = AuthState.LoggedOut(ADMIN_USERNAME)
+        }
+    }
+
+    override suspend fun setupAdminAccount(username: String, password: String): Outcome<UserAccountSummary> = mutex.withLock {
+        if (accounts.containsKey(ADMIN_USERNAME)) {
+            return Outcome.Rejected(ErrorCode.ALREADY_EXISTS)
+        }
+        val cleanUser = username.trim().ifBlank { ADMIN_USERNAME }
+        if (cleanUser.length < 3 || password.length < 6) {
+            return Outcome.Rejected(ErrorCode.INVALID_AMOUNT)
+        }
+
+        val pwdChars = password.toCharArray()
+        val passwordHash = try {
+            withContext(Dispatchers.Default) {
+                PasswordHasher.hashPassword(pwdChars)
+            }
+        } finally {
+            pwdChars.fill('\u0000')
+        }
+
+        val adminRecord = StoredUserRecord(
+            username = cleanUser,
+            role = UserRole.ADMIN,
+            permissions = EditPermissions.admin(),
+            saltBase64 = passwordHash.saltBase64,
+            hashBase64 = passwordHash.hashBase64
+        )
+        accounts[cleanUser.lowercase()] = adminRecord
+        persistRecords()
+        _users.value = accounts.values.map { it.toSummary() }
+        val summary = adminRecord.toSummary()
+        AuditUseCase.recordEvent(cleanUser, "setup_admin_account", Outcome.Ok("admin_created"))
+        _authState.value = AuthState.Authenticated(summary)
+        Outcome.Ok(summary)
+    }
+
+    override suspend fun login(username: String, password: String): Outcome<UserAccountSummary> = mutex.withLock {
+        val cleanUser = username.trim()
+        if (cleanUser.isBlank() || password.isBlank()) {
+            return Outcome.Rejected(ErrorCode.INVALID_AMOUNT)
+        }
+        val record = accounts[cleanUser.lowercase()] ?: run {
+            AuditUseCase.recordEvent("unknown", "login_attempt", Outcome.Rejected(ErrorCode.NOT_FOUND))
+            return Outcome.Rejected(ErrorCode.NOT_FOUND)
+        }
+
+        val pwdChars = password.toCharArray()
+        val verified = try {
+            withContext(Dispatchers.Default) {
+                PasswordHasher.verifyPassword(
+                    pwdChars,
+                    PasswordHash(record.saltBase64, record.hashBase64)
+                )
+            }
+        } finally {
+            pwdChars.fill('\u0000')
+        }
+
+        if (!verified) {
+            AuditUseCase.recordEvent(record.username, "login_attempt", Outcome.Rejected(ErrorCode.CONFLICT))
+            return Outcome.Rejected(ErrorCode.CONFLICT)
+        }
+
+        val summary = record.toSummary()
+        AuditUseCase.recordEvent(record.username, "login_success", Outcome.Ok(record.role.name))
+        _authState.value = AuthState.Authenticated(summary)
+        Outcome.Ok(summary)
+    }
+
+    override suspend fun createOrUpdateUser(
+        username: String,
+        password: String?,
+        role: UserRole,
+        permissions: EditPermissions
+    ): Outcome<UserAccountSummary> = mutex.withLock {
+        val currentAuth = _authState.value as? AuthState.Authenticated
+            ?: return Outcome.Rejected(ErrorCode.CONFLICT)
+        if (!currentAuth.user.permissions.canManageUsers) {
+            return Outcome.Rejected(ErrorCode.CONFLICT)
+        }
+
+        val cleanUser = username.trim()
+        if (cleanUser.length < 3) return Outcome.Rejected(ErrorCode.INVALID_AMOUNT)
+        val key = cleanUser.lowercase()
+        val existing = accounts[key]
+
+        val resolvedHash = if (!password.isNullOrEmpty()) {
+            if (password.length < 6) return Outcome.Rejected(ErrorCode.INVALID_AMOUNT)
+            val chars = password.toCharArray()
+            try {
+                withContext(Dispatchers.Default) {
+                    PasswordHasher.hashPassword(chars)
+                }
+            } finally {
+                chars.fill('\u0000')
+            }
+        } else if (existing != null) {
+            PasswordHash(existing.saltBase64, existing.hashBase64)
+        } else {
+            return Outcome.Rejected(ErrorCode.INVALID_AMOUNT)
+        }
+
+        val enforcedPermissions = if (key == ADMIN_USERNAME || role == UserRole.ADMIN) {
+            EditPermissions.admin()
+        } else {
+            permissions
+        }
+        val enforcedRole = if (key == ADMIN_USERNAME) UserRole.ADMIN else role
+
+        val updated = StoredUserRecord(
+            username = existing?.username ?: cleanUser,
+            role = enforcedRole,
+            permissions = enforcedPermissions,
+            saltBase64 = resolvedHash.saltBase64,
+            hashBase64 = resolvedHash.hashBase64
+        )
+        accounts[key] = updated
+        persistRecords()
+        _users.value = accounts.values.map { it.toSummary() }
+
+        val summary = updated.toSummary()
+        if (currentAuth.user.username.equals(summary.username, ignoreCase = true)) {
+            _authState.value = AuthState.Authenticated(summary)
+        }
+        AuditUseCase.recordEvent(currentAuth.user.username, "manage_user_${summary.username}", Outcome.Ok(summary.role.name))
+        Outcome.Ok(summary)
+    }
+
+    override suspend fun deleteUser(username: String): Outcome<Unit> = mutex.withLock {
+        val currentAuth = _authState.value as? AuthState.Authenticated
+            ?: return Outcome.Rejected(ErrorCode.CONFLICT)
+        if (!currentAuth.user.permissions.canManageUsers) {
+            return Outcome.Rejected(ErrorCode.CONFLICT)
+        }
+        val key = username.trim().lowercase()
+        if (key == ADMIN_USERNAME || key == currentAuth.user.username.lowercase()) {
+            return Outcome.Rejected(ErrorCode.CONFLICT)
+        }
+        if (accounts.remove(key) == null) {
+            return Outcome.Rejected(ErrorCode.NOT_FOUND)
+        }
+        persistRecords()
+        _users.value = accounts.values.map { it.toSummary() }
+        AuditUseCase.recordEvent(currentAuth.user.username, "delete_user_$key", Outcome.Ok("deleted"))
+        Outcome.Ok(Unit)
+    }
+
+    override suspend fun logout() = mutex.withLock {
+        val current = (_authState.value as? AuthState.Authenticated)?.user?.username
+        if (current != null) {
+            AuditUseCase.recordEvent(current, "logout", Outcome.Ok("signed_out"))
+        }
+        _authState.value = computeUnauthenticatedState()
+    }
+
+    private fun loadRecords(): List<StoredUserRecord> {
+        val raw = prefs.getString(KEY_ACCOUNTS_JSON, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            buildList {
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    val role = runCatching { UserRole.valueOf(obj.getString("role")) }.getOrDefault(UserRole.PRACTITIONER)
+                    val perms = EditPermissions(
+                        canEditPatients = obj.optBoolean("canEditPatients", true),
+                        canEditTreatments = obj.optBoolean("canEditTreatments", true),
+                        canRecordPayments = obj.optBoolean("canRecordPayments", true),
+                        canManageUsers = obj.optBoolean("canManageUsers", role == UserRole.ADMIN)
+                    )
+                    add(
+                        StoredUserRecord(
+                            username = obj.getString("username"),
+                            role = role,
+                            permissions = perms,
+                            saltBase64 = obj.getString("salt"),
+                            hashBase64 = obj.getString("hash")
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun persistRecords() {
+        val array = JSONArray()
+        accounts.values.forEach { rec ->
+            array.put(
+                JSONObject().apply {
+                    put("username", rec.username)
+                    put("role", rec.role.name)
+                    put("canEditPatients", rec.permissions.canEditPatients)
+                    put("canEditTreatments", rec.permissions.canEditTreatments)
+                    put("canRecordPayments", rec.permissions.canRecordPayments)
+                    put("canManageUsers", rec.permissions.canManageUsers)
+                    put("salt", rec.saltBase64)
+                    put("hash", rec.hashBase64)
+                }
+            )
+        }
+        prefs.edit().putString(KEY_ACCOUNTS_JSON, array.toString()).apply()
+    }
+
+    private companion object {
+        const val ADMIN_USERNAME = "admin"
+        const val PLACEHOLDER_PASSWORD = "ADMIN_BOOTSTRAP_PASSWORD_DEFAULT_VALUE"
+        const val KEY_ACCOUNTS_JSON = "auth_accounts_v2"
+    }
 }
 
 class InMemoryPatientRepository : PatientRepository {
@@ -166,7 +472,7 @@ class InMemoryCashSessionRepository : CashSessionRepository {
         CashReceiptEntity(4L, "Amine Benali", "Consultation + Radio", Da(14_500L), now - 600_000L)
     )
     private val auditStore = mutableListOf(
-        AuditUseCase.recordEvent("dr.bouzid", "open_cash_session", Outcome.Ok("SESSION-2026-11"))
+        AuditUseCase.recordEvent("admin", "open_cash_session", Outcome.Ok("SESSION-2026-11"))
     )
 
     private val _receipts = MutableStateFlow(receiptStore.toList())
@@ -180,7 +486,7 @@ class InMemoryCashSessionRepository : CashSessionRepository {
     override suspend fun recordReceipt(patientName: String, label: String, amount: Money): Outcome<CashReceiptEntity> = mutex.withLock {
         if (patientName.isBlank() || label.isBlank() || amount.amount <= 0L) {
             val rejected = Outcome.Rejected(ErrorCode.INVALID_AMOUNT)
-            auditStore.add(AuditUseCase.recordEvent("dr.bouzid", "record_receipt", rejected))
+            auditStore.add(AuditUseCase.recordEvent("cabinet", "record_receipt", rejected))
             _auditEvents.value = auditStore.toList()
             return rejected
         }
@@ -193,7 +499,7 @@ class InMemoryCashSessionRepository : CashSessionRepository {
         )
         receiptStore.add(0, entity)
         _receipts.value = receiptStore.toList()
-        auditStore.add(AuditUseCase.recordEvent("dr.bouzid", "record_receipt", Outcome.Ok("receipt-${entity.id}")))
+        auditStore.add(AuditUseCase.recordEvent("cabinet", "record_receipt", Outcome.Ok("receipt-${entity.id}")))
         _auditEvents.value = auditStore.toList()
         Outcome.Ok(entity)
     }
