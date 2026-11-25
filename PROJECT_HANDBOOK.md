@@ -4,10 +4,10 @@
 
 This handbook documents the **Dental Cabinet** financial/medical domain project, now fully aligned with ECC Android Clean Architecture patterns and supported across **Kotlin Multiplatform** (Android + iOS).
 
-**Version:** 1.0.0 (P1 Complete, P2 Multiplatform Ready)  
-**Status:** ✅ Production-Ready (67/67 tests passing)  
+**Version:** 1.0.0 (Android Build Recovered)  
+**Status:** ✅ Verified Build (`:app:assembleDebug` + 17/17 `:core:domain:test` passing)  
 **Primary Maintainer:** Head Chief Developer  
-**Last Updated:** 2026-11-23
+**Last Updated:** 2026-11-25
 
 ---
 
@@ -32,16 +32,14 @@ This handbook documents the **Dental Cabinet** financial/medical domain project,
 Dental Cabinet is a **Kotlin financial/medical domain project** implementing Clean Architecture for dental/medical practice management. It covers exact whole-DA (Algerian Dinar) arithmetic, financial finalization, dentist balances, cash reconciliation, and clinical eligibility.
 
 ### 1.2 Target Platforms
-- **Android** (primary, JVM + Room/SQLCipher)
-- **iOS** (via Kotlin Multiplatform)
-- **Shared code** - runs on both platforms
+- **Android** (primary, Jetpack Compose + Koin DI, `compileSdk = 35`, `minSdk = 24`)
+- **Legacy/Unconfigured KMP Modules** (`kmp-core`, `kmp-compose` retained on disk, excluded from active `settings.gradle.kts`)
 
-### 1.3 Key Metrics
-- **67 tests** across **14 test suites**
+### 1.3 Key Metrics (Verified)
+- **17 unit tests** across **3 JUnit 5 suites** (`MoneyTest`, `DomainTypesTest`, `AuditUseCaseTest`)
 - **0 failures, 0 errors, 0 skipped**
-- **13 domain use cases** (shared across platforms)
-- **7-table SQLDelight schema** (compiled SQL)
-- **100% ECC alignment**
+- **Active Gradle modules**: `:app`, `:core:domain`, `:core:data`, `:design-system`
+- **APK**: `app/build/outputs/apk/debug/app-debug.apk` (19 MB)
 
 ---
 

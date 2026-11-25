@@ -12,4 +12,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "dental-cabinet"
-include(":core:data", ":core:security", ":core:domain", ":design-system", ":kmp-core", ":kmp-compose", ":app")
+include(":core:data", ":core:domain", ":design-system", ":app")
